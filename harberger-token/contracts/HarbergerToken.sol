@@ -1,4 +1,4 @@
-pragma solidity ^0.4.16;
+pragma solidity ^0.4.24;
 
 contract owned {
     address public owner;
@@ -174,15 +174,14 @@ contract TokenERC20 {
     }
 }
 
-/******************************************/
-/*       ADVANCED TOKEN STARTS HERE       */
-/******************************************/
-
+/* Harberger Token */
 contract HarbergerToken is owned, TokenERC20 {
 
     uint256 public sellPrice;
     uint256 public buyPrice;
     uint public minBalanceForAccounts;
+    uint constant taxRate = 7; // *Fixed* tax rate (7% annual)
+    uint taxCollectedBalance; // Current amount of tax collected
 
     mapping (address => bool) public frozenAccount;
 
