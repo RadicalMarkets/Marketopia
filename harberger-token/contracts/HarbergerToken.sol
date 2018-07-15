@@ -5,7 +5,7 @@ import "openzeppelin-solidity/contracts/ownership/Ownable.sol";
 
 contract HarbergerToken is StandardToken, Ownable {
     string public name = "HarbergerToken";
-    string public symbol = "HT";
+    string public symbol = "HT";//Token Symbol
     uint8 public decimals = 2;
     uint public INITIAL_SUPPLY = 120000;
     uint constant taxRate = 7; // *Fixed* tax rate (7% annual)
