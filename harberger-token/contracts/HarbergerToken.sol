@@ -185,9 +185,13 @@ contract HarbergerToken is owned, TokenERC20 {
 
     mapping (address => bool) public frozenAccount;
 
+    mapping (address => uint256) public parkedEthBalanceForTax;
+    mapping (address => uint256) public askPriceMap;
+    mapping (address => uint256) public taxPaidDateMap;
+
     /* This generates a public event on the blockchain that will notify clients */
     event FrozenFunds(address target, bool frozen);
-
+    event EthDepositForTax(address sender, uint amount);
     /* Initializes contract with initial supply tokens to the creator of the contract */
     constructor(
         uint256 initialSupply,
@@ -254,4 +258,31 @@ contract HarbergerToken is owned, TokenERC20 {
     function setMinBalance(uint minimumBalanceInFinney) public onlyOwner {
         minBalanceForAccounts = minimumBalanceInFinney * 1 finney;
     }
+
+
+    //Can a percentage be parked for Tax when the buyer sends ether to buy the assets?
+
+    /**
+     *Method to store ether for the asset holder.
+     *todo: Call during asset transfer
+     *This can be called anytime by asset holder 
+     */
+     function parkEthForTax() payable public {
+        uint amount = msg.value;
+        parkedEthBalanceForTax[msg.sender] += amount;
+        emit EthDepositForTax(msg.sender, amount);
+    }
+
+    /**
+     * Collects Tax and sends to the owner of the contract. This could be enhanced to send to designated Tax collector 
+     * Tax = (CurrentDate-lastPayDate) in days * Quantity * Ask Price * Tax (.07/365) 
+     * todo
+     */
+    function collectTax(address seller) public  {
+        uint amount = balanceOf[seller];
+        uint askPrice = balanceOf[seller]; // todo: set the askprice and amount when the seller gets it originally.
+        //       unit tax = amount * askPrice * (now - last paid) in days * .07/365
+    }
+    
+
 }
