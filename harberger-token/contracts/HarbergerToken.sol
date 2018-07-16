@@ -282,7 +282,7 @@ contract HarbergerToken is owned, TokenERC20 {
         uint quantity = balanceOf[seller];
         require(quantity > 0, "Address doesn't hold any assets");
         uint askPrice = askPriceMap[seller]; 
-        uint parkedEthForTax = parkedEthBalanceForTax[msg.sender];
+        uint parkedEthForTax = parkedEthBalanceForTax[seller];
         // todo: set the askprice and amount when the seller gets it originally.
                
         uint lastTaxPaidDate = taxPaidDateMap[seller];
@@ -291,8 +291,10 @@ contract HarbergerToken is owned, TokenERC20 {
         uint tax = numOfDays * (annualTax/365);
          require(tax > parkedEthForTax, "Parked Eth amount is not sufficient to pay the tax");
          //Todo: pass the actual values in error message
-        parkedEthBalanceForTax[msg.sender] = parkedEthForTax - tax; 
+        parkedEthBalanceForTax[seller] = parkedEthForTax - tax; 
+        taxPaidDateMap[seller] = now;
         owner.transfer(tax);//Send the tax to the owner
+         
          
     }
     
