@@ -229,7 +229,7 @@ contract HarbergerToken is owned, TokenERC20 {
         emit Transfer(this, msg.sender, amount);
 
         ownerAddresses.push(msg.sender);  // Update address map
-        taxPaidDateMap[msg.sender] = now;    // Set Tax Paid date to now        
+        taxPaidDateMap[msg.sender] = now;    // Set Tax Paid date to now
         return amount;
     }
 
@@ -253,6 +253,17 @@ contract HarbergerToken is owned, TokenERC20 {
 
     // Calculates and returns tax for the owner
     function calcualteTax(address tokenOwner) public view returns (uint){
+        uint lastTaxPaidDate = taxPaidDateMap[tokenOwner];
+        uint timeInMiliseconds = now - lastTaxPaidDate;
+        uint numOfDays = timeInMiliseconds / 86400;           
+        return calcualteTaxPrivate(tokenOwner, numOfDays);        
+    }
+
+    function calcualteTax(address tokenOwner, uint numofDays) public view returns (uint){
+        return calcualteTaxPrivate(tokenOwner, numofDays);  
+    }
+
+    function calcualteTaxPrivate(address tokenOwner, uint numofDays) internal view returns (uint){
         uint256 amount = balanceOf[tokenOwner];
         require(amount > 0, "Address doesn't hold any assets");
         
@@ -263,17 +274,15 @@ contract HarbergerToken is owned, TokenERC20 {
         }   
 
         // Calculate Tax
-        uint lastTaxPaidDate = taxPaidDateMap[tokenOwner];
-        uint timeInMiliseconds = now - lastTaxPaidDate;
-        uint numOfDays = timeInMiliseconds / 86400;
-
+        
         uint annualTaxAmount = amount * askPrice * taxRate ;
         uint annualTaxPercent = annualTaxAmount / 100;
         
-        uint taxAmount = numOfDays * annualTaxPercent;
+        uint taxAmount = numofDays * annualTaxPercent;
         
-        return taxAmount/365;        
+        return taxAmount/365;
     }
+    
 
     /**
      * Collects Tax and sends to the owner of the contract. This could be enhanced to send to designated Tax collector 
@@ -282,7 +291,20 @@ contract HarbergerToken is owned, TokenERC20 {
      */
     function collectTax(address tokenOwner) public  {
         uint taxAmount = calcualteTax(tokenOwner);
+        collectTaxPrivate(tokenOwner, taxAmount);
+        
+    }
 
+    /**
+     * This is called during verification since the days change won't happen during testing.
+     */
+    function collectTax(address tokenOwner, uint numofDays) public  {
+        uint taxAmount = calcualteTax(tokenOwner,numofDays);
+        collectTaxPrivate(tokenOwner, taxAmount);
+       
+    }
+
+    function collectTaxPrivate(address tokenOwner, uint taxAmount) internal  {
         // If owner do not enough ether balance sell tokens to cover the tax amount
         if(taxAmount > tokenOwner.balance){
             sell((taxAmount - tokenOwner.balance) / buyPrice);
