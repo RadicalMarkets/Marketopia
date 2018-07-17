@@ -186,6 +186,7 @@ contract HarbergerToken is owned, TokenERC20 {
     mapping (address => uint256) public askPriceMap;
     mapping (address => uint256) public taxPaidDateMap;
     address[] public ownerAddresses;
+     //todo: Enhance the whole thing to have a stuct. so that it can have N number of holdings at different prices
  
     /* Initializes contract with initial supply tokens to the creator of the contract */
     constructor(
@@ -333,5 +334,21 @@ contract HarbergerToken is owned, TokenERC20 {
     function setAskPrice(uint256 askPrice) public {
         askPriceMap[msg.sender] = askPrice;
     }
+
+    function askPrice(address assetOwnerAddress) public view returns(uint) {
+        return askPriceMap[assetOwnerAddress];
+    }
+    function quantity(address assetOwnerAddress) public view returns(uint) {
+        return balanceOf[assetOwnerAddress];
+    }
+    function ethBalance(address assetOwnerAddress) public view returns(uint) {
+        return assetOwnerAddress.balance;
+    }
+
+    function numAccounts() public view returns(uint) {
+        return ownerAddresses.length;
+    }
+     
+
 }
 
