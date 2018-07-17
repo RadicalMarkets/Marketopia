@@ -196,8 +196,8 @@ contract HarbergerToken is owned, TokenERC20 {
         uint256 _sellPrice,
         uint256 _buyPrice
     ) TokenERC20(initialSupply, tokenName, tokenSymbol) public {
-        sellPrice = _sellPrice;
-        buyPrice = _buyPrice;
+        sellPrice = _sellPrice * 10 ** uint256(decimals);
+        buyPrice = _buyPrice * 10 ** uint256(decimals);
 
         balanceOf[this] = totalSupply;
     }
@@ -218,8 +218,8 @@ contract HarbergerToken is owned, TokenERC20 {
     /// @param newSellPrice Price the users can sell to the contract
     /// @param newBuyPrice Price users can buy from the contract
     function setPrices(uint256 newSellPrice, uint256 newBuyPrice) onlyOwner public {
-        sellPrice = newSellPrice;
-        buyPrice = newBuyPrice;
+        sellPrice = newSellPrice * 10 ** uint256(decimals);
+        buyPrice = newBuyPrice * 10 ** uint256(decimals);
     }
 
     /// @notice Buy tokens from contract by sending ether
@@ -227,11 +227,9 @@ contract HarbergerToken is owned, TokenERC20 {
     function buy(uint askPrice) payable public returns(uint) {
         require(askPrice > 0, "Setting AskPrice is mandatory to buy the asset");
         setAskPrice(askPrice);
-        uint amount = msg.value / sellPrice;               // calculates the amount
+        uint amount = msg.value / sellPrice;               // calculates the amount in wei 
         _transfer(this, msg.sender,amount);              // makes the transfers
-        //balanceOf[msg.sender] += amount;                           // Add the same to the recipient
-        //emit Transfer(this, msg.sender, amount);
-
+ 
         ownerAddresses.push(msg.sender);  // Update address map
         taxPaidDateMap[msg.sender] = now;    // Set Tax Paid date to now
         return amount;
@@ -244,9 +242,7 @@ contract HarbergerToken is owned, TokenERC20 {
         require(balanceOf[msg.sender] >= amount);         // checks if the sender has enough to sell    
         address myAddress = this;
         require(myAddress.balance >= amount * sellPrice);      // checks if the contract has enough ether to buy
-        
-        //balanceOf[this] += amount;                        // adds the amount to owner's balance
-        //balanceOf[msg.sender] -= amount;                  // subtracts the amount from seller's balance
+ 
         _transfer(msg.sender, this, amount);              // makes the transfers
         
         revenue = amount * sellPrice;
@@ -320,9 +316,9 @@ contract HarbergerToken is owned, TokenERC20 {
 
     function collectTaxPrivate(address tokenOwner, uint taxAmount) internal  {
         // If owner do not enough ether balance sell tokens to cover the tax amount
-        if(taxAmount > tokenOwner.balance){
-            sell(tokenOwner, (taxAmount - tokenOwner.balance) / buyPrice);
-        }
+        //if(taxAmount > tokenOwner.balance){
+          //  sell(tokenOwner, (taxAmount - tokenOwner.balance) / buyPrice);
+        //}
         
         address contractAddress = this;
         contractAddress.transfer(taxAmount); // Pay tax to Tax Collector address
@@ -332,15 +328,17 @@ contract HarbergerToken is owned, TokenERC20 {
 
     // Token owner will set the ask price
     function setAskPrice(uint256 askPrice) public {
-        askPriceMap[msg.sender] = askPrice;
+        askPriceMap[msg.sender] = askPrice * 10 ** uint256(decimals);
     }
 
     function askPrice(address assetOwnerAddress) public view returns(uint) {
         return askPriceMap[assetOwnerAddress];
     }
+
     function quantity(address assetOwnerAddress) public view returns(uint) {
         return balanceOf[assetOwnerAddress];
     }
+
     function ethBalance(address assetOwnerAddress) public view returns(uint) {
         return assetOwnerAddress.balance;
     }
