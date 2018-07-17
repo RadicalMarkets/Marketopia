@@ -271,13 +271,21 @@ contract HarbergerToken is owned, TokenERC20 {
 
     // Calculates and returns tax for the owner
     function calcualteTax(address tokenOwner) public view returns (uint){
-        uint lastTaxPaidDate = taxPaidDateMap[tokenOwner];
-        uint timeInMiliseconds = now - lastTaxPaidDate;
-        uint numOfDays = timeInMiliseconds / 86400;           
-        return calcualteTaxPrivate(tokenOwner, numOfDays);        
+        uint256 amount = balanceOf[tokenOwner];
+        require(amount > 0, "Address doesn't hold any assets");
+
+        uint lastTaxPaidDate = taxPaidDateMap[tokenOwner];    
+        uint annualTaxAmount = (now - lastTaxPaidDate) * amount * askPriceMap[tokenOwner] * taxRate; 
+        uint256 taxDivisor = 100 * 86400 * 365;
+        
+        return annualTaxAmount / taxDivisor;
     }
 
-    function calcualteTax(address tokenOwner, uint numofDays) public view returns (uint){
+    
+
+
+
+    function calcualteTaxForDays(address tokenOwner, uint numofDays) public view returns (uint){
         return calcualteTaxPrivate(tokenOwner, numofDays);  
     }
 
@@ -295,6 +303,7 @@ contract HarbergerToken is owned, TokenERC20 {
     }
     
 
+
     /**
      * Collects Tax and sends to the owner of the contract. This could be enhanced to send to designated Tax collector 
      * Tax = (CurrentDate-lastPayDate) in days * Quantity * Ask Price * Tax (.07/365) 
@@ -309,7 +318,7 @@ contract HarbergerToken is owned, TokenERC20 {
      * This is called during verification since the days change won't happen during testing.
      */
     function collectTax(address tokenOwner, uint numofDays) onlyOwner public {
-        uint taxAmount = calcualteTax(tokenOwner,numofDays);
+        uint taxAmount = calcualteTaxForDays(tokenOwner,numofDays);
         collectTaxPrivate(tokenOwner, taxAmount);
        
     }
