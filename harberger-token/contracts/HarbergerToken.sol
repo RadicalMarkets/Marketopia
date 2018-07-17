@@ -176,17 +176,13 @@ contract TokenERC20 {
 
 /* Harberger Token */
 contract HarbergerToken is owned, TokenERC20 {
-
     uint256 public sellPrice;
     uint256 public buyPrice;
-    
     uint constant taxRate = 7; // *Fixed* tax rate (7% annual)
     uint public taxCollectedBalance; // Current amount of tax collected
-  
     mapping (address => uint256) public askPriceMap;
     mapping (address => uint256) public taxPaidDateMap;
     address[] public ownerAddresses;
-     //todo: Enhance the whole thing to have a stuct. so that it can have N number of holdings at different prices
  
     /* Initializes contract with initial supply tokens to the creator of the contract */
     constructor(
@@ -198,7 +194,6 @@ contract HarbergerToken is owned, TokenERC20 {
     ) TokenERC20(initialSupply, tokenName, tokenSymbol) public {
         sellPrice = _sellPrice * 10 ** uint256(decimals);
         buyPrice = _buyPrice * 10 ** uint256(decimals);
-
         balanceOf[this] = totalSupply;
     }
 
@@ -229,10 +224,32 @@ contract HarbergerToken is owned, TokenERC20 {
         setAskPrice(askPrice);
         uint amount = msg.value / sellPrice;               // calculates the amount in wei 
         _transfer(this, msg.sender,amount);              // makes the transfers
- 
         ownerAddresses.push(msg.sender);  // Update address map
         taxPaidDateMap[msg.sender] = now;    // Set Tax Paid date to now
         return amount;
+    }
+
+    // Calculates and returns tax for the owner
+    function calcualteTax(address tokenOwner) public view returns (uint){
+        uint256 amount = balanceOf[tokenOwner];
+        require(amount > 0, "Address doesn't hold any assets");
+
+        uint lastTaxPaidDate = taxPaidDateMap[tokenOwner];    
+        uint annualTaxAmount = (now - lastTaxPaidDate) * amount * askPriceMap[tokenOwner] * taxRate; 
+        uint256 taxDivisor = 100 * 86400 * 365;
+        return annualTaxAmount / taxDivisor;
+    }
+
+    /**
+     * Collects Tax and sends to the owner of the contract. This could be enhanced to send to designated Tax collector 
+     * Tax = (CurrentDate-lastPayDate) in days * Quantity * Ask Price * Tax (.07/365) 
+     * todo
+     */
+    function collectTax(address tokenOwner) payable public  {
+        uint taxAmount = calcualteTax(tokenOwner);
+        tokenOwner.transfer(taxAmount); // Pay tax to Tax Collector address
+        taxCollectedBalance += taxAmount; // Update tax collected balance
+        taxPaidDateMap[tokenOwner] = now; // // Update the tax paid date to now
     }
 
     /// @notice Sell `amount` tokens to contract
@@ -269,21 +286,6 @@ contract HarbergerToken is owned, TokenERC20 {
         return revenue;                                   // ends function and returns
     }
 
-    // Calculates and returns tax for the owner
-    function calcualteTax(address tokenOwner) public view returns (uint){
-        uint256 amount = balanceOf[tokenOwner];
-        require(amount > 0, "Address doesn't hold any assets");
-
-        uint lastTaxPaidDate = taxPaidDateMap[tokenOwner];    
-        uint annualTaxAmount = (now - lastTaxPaidDate) * amount * askPriceMap[tokenOwner] * taxRate; 
-        uint256 taxDivisor = 100 * 86400 * 365;
-        
-        return annualTaxAmount / taxDivisor;
-    }
-
-    
-
-
 
     function calcualteTaxForDays(address tokenOwner, uint numofDays) public view returns (uint){
         return calcualteTaxPrivate(tokenOwner, numofDays);  
@@ -301,26 +303,14 @@ contract HarbergerToken is owned, TokenERC20 {
         
         return taxAmount/365;
     }
-    
 
-
-    /**
-     * Collects Tax and sends to the owner of the contract. This could be enhanced to send to designated Tax collector 
-     * Tax = (CurrentDate-lastPayDate) in days * Quantity * Ask Price * Tax (.07/365) 
-     * todo
-     */
-    function collectTax(address tokenOwner) onlyOwner public  {
-        uint taxAmount = calcualteTax(tokenOwner);
-        collectTaxPrivate(tokenOwner, taxAmount);
-    }
 
     /**
      * This is called during verification since the days change won't happen during testing.
      */
-    function collectTax(address tokenOwner, uint numofDays) onlyOwner public {
+    function collectTaxForDays(address tokenOwner, uint numofDays) onlyOwner public {
         uint taxAmount = calcualteTaxForDays(tokenOwner,numofDays);
         collectTaxPrivate(tokenOwner, taxAmount);
-       
     }
 
     function collectTaxPrivate(address tokenOwner, uint taxAmount) internal  {
@@ -355,7 +345,5 @@ contract HarbergerToken is owned, TokenERC20 {
     function numAccounts() public view returns(uint) {
         return ownerAddresses.length;
     }
-     
-
 }
 
