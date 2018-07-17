@@ -229,8 +229,7 @@ contract HarbergerToken is owned, TokenERC20 {
         emit Transfer(this, msg.sender, amount);
 
         ownerAddresses.push(msg.sender);  // Update address map
-        taxPaidDateMap[msg.sender] = now;    // Set Tax Paid date to now
-        askPriceMap[msg.sender] = sellPrice; // Set the Ask Price to buy price
+        taxPaidDateMap[msg.sender] = now;    // Set Tax Paid date to now        
         return amount;
     }
 
