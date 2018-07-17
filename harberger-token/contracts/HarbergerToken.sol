@@ -328,7 +328,7 @@ contract HarbergerToken is owned, TokenERC20 {
         //if(taxAmount > tokenOwner.balance){
           //  sell(tokenOwner, (taxAmount - tokenOwner.balance) / buyPrice);
         //}
-        
+        require((taxAmount < tokenOwner.balance), "The asset holder doesn't have enough balance to pay tax");
         address contractAddress = this;
         contractAddress.transfer(taxAmount); // Pay tax to Tax Collector address
         taxCollectedBalance += taxAmount; // Update tax collected balance
