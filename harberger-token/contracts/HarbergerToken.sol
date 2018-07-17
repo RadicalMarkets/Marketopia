@@ -179,57 +179,36 @@ contract HarbergerToken is owned, TokenERC20 {
 
     uint256 public sellPrice;
     uint256 public buyPrice;
-    uint public minBalanceForAccounts;
+    
     uint constant taxRate = 7; // *Fixed* tax rate (7% annual)
-    uint taxCollectedBalance; // Current amount of tax collected
-
-    mapping (address => bool) public frozenAccount;
-
-    mapping (address => uint256) public parkedEthBalanceForTax;
+    uint public taxCollectedBalance; // Current amount of tax collected
+  
     mapping (address => uint256) public askPriceMap;
     mapping (address => uint256) public taxPaidDateMap;
-
-    /* This generates a public event on the blockchain that will notify clients */
-    event FrozenFunds(address target, bool frozen);
-    event EthDepositForTax(address sender, uint amount);
+    address[] public ownerAddresses;
+ 
     /* Initializes contract with initial supply tokens to the creator of the contract */
     constructor(
         uint256 initialSupply,
         string tokenName,
-        string tokenSymbol
-    ) TokenERC20(initialSupply, tokenName, tokenSymbol) public {}
+        string tokenSymbol,
+        uint256 _sellPrice,
+        uint256 _buyPrice
+    ) TokenERC20(initialSupply, tokenName, tokenSymbol) public {
+        sellPrice = _sellPrice;
+        buyPrice = _buyPrice;
+    }
 
     /* Internal transfer, only can be called by this contract */
     function _transfer(address _from, address _to, uint _value) internal {
         require (_to != 0x0);                               // Prevent transfer to 0x0 address. Use burn() instead
         require (balanceOf[_from] >= _value);               // Check if the sender has enough
+        require (balanceOf[_to] == 0);                      // Allow transfer only if there is ZERO tokens
         require (balanceOf[_to] + _value >= balanceOf[_to]); // Check for overflows
-        require(!frozenAccount[_from]);                     // Check if sender is frozen
-        require(!frozenAccount[_to]);                       // Check if recipient is frozen
+        
         balanceOf[_from] -= _value;                         // Subtract from the sender
         balanceOf[_to] += _value;                           // Add the same to the recipient
         emit Transfer(_from, _to, _value);
-
-        if(msg.sender.balance < minBalanceForAccounts)
-            sell((minBalanceForAccounts - msg.sender.balance) / sellPrice);
-    }
-
-    /// @notice Create `mintedAmount` tokens and send it to `target`
-    /// @param target Address to receive the tokens
-    /// @param mintedAmount the amount of tokens it will receive
-    function mintToken(address target, uint256 mintedAmount) onlyOwner public {
-        balanceOf[target] += mintedAmount;
-        totalSupply += mintedAmount;
-        emit Transfer(0, this, mintedAmount);
-        emit Transfer(this, target, mintedAmount);
-    }
-
-    /// @notice `freeze? Prevent | Allow` `target` from sending & receiving tokens
-    /// @param target Address to be frozen
-    /// @param freeze either to freeze it or not
-    function freezeAccount(address target, bool freeze) onlyOwner public {
-        frozenAccount[target] = freeze;
-        emit FrozenFunds(target, freeze);
     }
 
     /// @notice Allow users to buy tokens for `newBuyPrice` eth and sell tokens for `newSellPrice` eth
@@ -241,36 +220,57 @@ contract HarbergerToken is owned, TokenERC20 {
     }
 
     /// @notice Buy tokens from contract by sending ether
-    function buy() payable public {
-        uint amount = msg.value / buyPrice;               // calculates the amount
-        _transfer(this, msg.sender, amount);              // makes the transfers
+    function buy() payable public returns(uint) {
+        uint amount = msg.value / sellPrice;               // calculates the amount
+        balanceOf[msg.sender] += amount;                           // Add the same to the recipient
+        emit Transfer(this, msg.sender, amount);
+
+        ownerAddresses.push(msg.sender);  // Update address map
+        taxPaidDateMap[msg.sender] = now;    // Set Tax Paid date to now
+        askPriceMap[msg.sender] = sellPrice; // Set the Ask Price to buy price
+        return amount;
     }
 
     /// @notice Sell `amount` tokens to contract
     /// @param amount amount of tokens to be sold
-    function sell(uint256 amount) public {
+    function sell(uint256 amount) public returns (uint revenue){
+        require(askPriceMap[msg.sender] > 0); // Allow to sell only if ask price is set            
+        require(balanceOf[msg.sender] >= amount);         // checks if the sender has enough to sell    
         address myAddress = this;
         require(myAddress.balance >= amount * sellPrice);      // checks if the contract has enough ether to buy
+        
+        balanceOf[this] += amount;                        // adds the amount to owner's balance
+        balanceOf[msg.sender] -= amount;                  // subtracts the amount from seller's balance
         _transfer(msg.sender, this, amount);              // makes the transfers
-        msg.sender.transfer(amount * sellPrice);          // sends ether to the seller. It's important to do this last to avoid recursion attacks
+        
+        revenue = amount * sellPrice;
+        msg.sender.transfer(revenue);          // sends ether to the seller. It's important to do this last to avoid recursion attacks
+        emit Transfer(msg.sender, this, amount);               // executes an event reflecting on the change
+        return revenue;                                   // ends function and returns
     }
 
-    function setMinBalance(uint minimumBalanceInFinney) public onlyOwner {
-        minBalanceForAccounts = minimumBalanceInFinney * 1 finney;
-    }
+    // Calculates and returns tax for the owner
+    function calcualteTax(address tokenOwner) public view returns (uint){
+        uint256 amount = balanceOf[tokenOwner];
+        require(amount > 0, "Address doesn't hold any assets");
+        
+        // Set Ask Price if not set by owner
+        uint askPrice = askPriceMap[tokenOwner]; 
+        if(askPrice <= 0) {
+            askPrice = sellPrice;
+        }   
 
+        // Calculate Tax
+        uint lastTaxPaidDate = taxPaidDateMap[tokenOwner];
+        uint timeInMiliseconds = now - lastTaxPaidDate;
+        uint numOfDays = timeInMiliseconds / 86400;
 
-    //Can a percentage be parked for Tax when the buyer sends ether to buy the assets?
-
-    /**
-     *Method to store ether for the asset holder.
-     *todo: Call during asset transfer
-     *This can be called anytime by asset holder 
-     */
-     function parkEthForTax() payable public {
-        uint amount = msg.value;
-        parkedEthBalanceForTax[msg.sender] += amount;
-        emit EthDepositForTax(msg.sender, amount);
+        uint annualTaxAmount = amount * askPrice * taxRate ;
+        uint annualTaxPercent = annualTaxAmount / 100;
+        
+        uint taxAmount = numOfDays * annualTaxPercent;
+        
+        return taxAmount/365;        
     }
 
     /**
@@ -278,25 +278,25 @@ contract HarbergerToken is owned, TokenERC20 {
      * Tax = (CurrentDate-lastPayDate) in days * Quantity * Ask Price * Tax (.07/365) 
      * todo
      */
-    function collectTax(address seller) public  {
-        uint quantity = balanceOf[seller];
-        require(quantity > 0, "Address doesn't hold any assets");
-        uint askPrice = askPriceMap[seller]; 
-        uint parkedEthForTax = parkedEthBalanceForTax[seller];
-        // todo: set the askprice and amount when the seller gets it originally.
-               
-        uint lastTaxPaidDate = taxPaidDateMap[seller];
-        uint numOfDays = (now - lastTaxPaidDate) / 60 / 60 / 24;
-        uint annualTax = quantity * askPrice * (taxRate /100);
-        uint tax = numOfDays * (annualTax/365);
-         require(tax > parkedEthForTax, "Parked Eth amount is not sufficient to pay the tax");
-         //Todo: pass the actual values in error message
-        parkedEthBalanceForTax[seller] = parkedEthForTax - tax; 
-        taxPaidDateMap[seller] = now;
-        owner.transfer(tax);//Send the tax to the owner
-         
-         
-    }
-    
+    function collectTax(address tokenOwner) public  {
+        uint taxAmount = calcualteTax(tokenOwner);
 
+        // If owner do not enough ether balance sell tokens to cover the tax amount
+        if(taxAmount > tokenOwner.balance){
+            sell((taxAmount - tokenOwner.balance) / buyPrice);
+        }
+        
+        owner.transfer(taxAmount); // Pay tax to Tax Collector address
+        taxCollectedBalance += taxAmount; // Update tax collected balance
+        taxPaidDateMap[tokenOwner] = now; // // Update the tax paid date to now
+    }
+
+    // Token owner will set the ask price
+    function setAskPrice(uint256 askPrice) public {
+        askPriceMap[msg.sender] = askPrice;
+    }
 }
+
+
+
+
