@@ -220,7 +220,10 @@ contract HarbergerToken is owned, TokenERC20 {
     }
 
     /// @notice Buy tokens from contract by sending ether
-    function buy() payable public returns(uint) {
+    //Force buyer to set askPrice when purchasing token
+    function buy(uint askPrice) payable public returns(uint) {
+        require(askPrice > 0, "Setting AskPrice is mandatory to buy the asset");
+        setAskPrice(askPrice);
         uint amount = msg.value / sellPrice;               // calculates the amount
         balanceOf[msg.sender] += amount;                           // Add the same to the recipient
         emit Transfer(this, msg.sender, amount);
@@ -295,8 +298,7 @@ contract HarbergerToken is owned, TokenERC20 {
     function setAskPrice(uint256 askPrice) public {
         askPriceMap[msg.sender] = askPrice;
     }
+
+   
 }
-
-
-
 
