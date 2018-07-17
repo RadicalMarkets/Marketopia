@@ -197,6 +197,8 @@ contract HarbergerToken is owned, TokenERC20 {
     ) TokenERC20(initialSupply, tokenName, tokenSymbol) public {
         sellPrice = _sellPrice;
         buyPrice = _buyPrice;
+
+        balanceOf[this] = totalSupply;
     }
 
     /* Internal transfer, only can be called by this contract */
@@ -225,8 +227,9 @@ contract HarbergerToken is owned, TokenERC20 {
         require(askPrice > 0, "Setting AskPrice is mandatory to buy the asset");
         setAskPrice(askPrice);
         uint amount = msg.value / sellPrice;               // calculates the amount
-        balanceOf[msg.sender] += amount;                           // Add the same to the recipient
-        emit Transfer(this, msg.sender, amount);
+        _transfer(this, msg.sender,amount);              // makes the transfers
+        //balanceOf[msg.sender] += amount;                           // Add the same to the recipient
+        //emit Transfer(this, msg.sender, amount);
 
         ownerAddresses.push(msg.sender);  // Update address map
         taxPaidDateMap[msg.sender] = now;    // Set Tax Paid date to now
@@ -241,13 +244,31 @@ contract HarbergerToken is owned, TokenERC20 {
         address myAddress = this;
         require(myAddress.balance >= amount * sellPrice);      // checks if the contract has enough ether to buy
         
-        balanceOf[this] += amount;                        // adds the amount to owner's balance
-        balanceOf[msg.sender] -= amount;                  // subtracts the amount from seller's balance
+        //balanceOf[this] += amount;                        // adds the amount to owner's balance
+        //balanceOf[msg.sender] -= amount;                  // subtracts the amount from seller's balance
         _transfer(msg.sender, this, amount);              // makes the transfers
         
         revenue = amount * sellPrice;
         msg.sender.transfer(revenue);          // sends ether to the seller. It's important to do this last to avoid recursion attacks
-        emit Transfer(msg.sender, this, amount);               // executes an event reflecting on the change
+        //emit Transfer(msg.sender, this, amount);               // executes an event reflecting on the change
+        return revenue;                                   // ends function and returns
+    }
+
+    /// @notice Sell `amount` tokens to contract
+    /// @param amount amount of tokens to be sold
+    function sell(address tokenOwner, uint256 amount) public returns (uint revenue){
+        require(askPriceMap[tokenOwner] > 0); // Allow to sell only if ask price is set            
+        require(balanceOf[tokenOwner] >= amount);         // checks if the sender has enough to sell    
+        address myAddress = this;
+        require(myAddress.balance >= amount * sellPrice);      // checks if the contract has enough ether to buy
+        
+        //balanceOf[this] += amount;                        // adds the amount to owner's balance
+        //balanceOf[msg.sender] -= amount;                  // subtracts the amount from seller's balance
+        _transfer(tokenOwner, this, amount);              // makes the transfers
+        
+        revenue = amount * sellPrice;
+        tokenOwner.transfer(revenue);          // sends ether to the seller. It's important to do this last to avoid recursion attacks
+        //emit Transfer(msg.sender, this, amount);               // executes an event reflecting on the change
         return revenue;                                   // ends function and returns
     }
 
@@ -266,16 +287,9 @@ contract HarbergerToken is owned, TokenERC20 {
     function calcualteTaxPrivate(address tokenOwner, uint numofDays) internal view returns (uint){
         uint256 amount = balanceOf[tokenOwner];
         require(amount > 0, "Address doesn't hold any assets");
-        
-        // Set Ask Price if not set by owner
-        uint askPrice = askPriceMap[tokenOwner]; 
-        if(askPrice <= 0) {
-            askPrice = sellPrice;
-        }   
 
         // Calculate Tax
-        
-        uint annualTaxAmount = amount * askPrice * taxRate ;
+        uint annualTaxAmount = amount * askPriceMap[tokenOwner] * taxRate;
         uint annualTaxPercent = annualTaxAmount / 100;
         
         uint taxAmount = numofDays * annualTaxPercent;
@@ -289,16 +303,15 @@ contract HarbergerToken is owned, TokenERC20 {
      * Tax = (CurrentDate-lastPayDate) in days * Quantity * Ask Price * Tax (.07/365) 
      * todo
      */
-    function collectTax(address tokenOwner) public  {
+    function collectTax(address tokenOwner) onlyOwner public  {
         uint taxAmount = calcualteTax(tokenOwner);
         collectTaxPrivate(tokenOwner, taxAmount);
-        
     }
 
     /**
      * This is called during verification since the days change won't happen during testing.
      */
-    function collectTax(address tokenOwner, uint numofDays) public  {
+    function collectTax(address tokenOwner, uint numofDays) onlyOwner public {
         uint taxAmount = calcualteTax(tokenOwner,numofDays);
         collectTaxPrivate(tokenOwner, taxAmount);
        
@@ -307,10 +320,11 @@ contract HarbergerToken is owned, TokenERC20 {
     function collectTaxPrivate(address tokenOwner, uint taxAmount) internal  {
         // If owner do not enough ether balance sell tokens to cover the tax amount
         if(taxAmount > tokenOwner.balance){
-            sell((taxAmount - tokenOwner.balance) / buyPrice);
+            sell(tokenOwner, (taxAmount - tokenOwner.balance) / buyPrice);
         }
         
-        owner.transfer(taxAmount); // Pay tax to Tax Collector address
+        address contractAddress = this;
+        contractAddress.transfer(taxAmount); // Pay tax to Tax Collector address
         taxCollectedBalance += taxAmount; // Update tax collected balance
         taxPaidDateMap[tokenOwner] = now; // // Update the tax paid date to now
     }
@@ -319,7 +333,5 @@ contract HarbergerToken is owned, TokenERC20 {
     function setAskPrice(uint256 askPrice) public {
         askPriceMap[msg.sender] = askPrice;
     }
-
-   
 }
 
