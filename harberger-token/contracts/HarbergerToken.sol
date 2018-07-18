@@ -286,45 +286,6 @@ contract HarbergerToken is owned, TokenERC20 {
         return revenue;                                   // ends function and returns
     }
 
-
-    function calcualteTaxForDays(address tokenOwner, uint numofDays) public view returns (uint){
-        return calcualteTaxPrivate(tokenOwner, numofDays);  
-    }
-
-    function calcualteTaxPrivate(address tokenOwner, uint numofDays) internal view returns (uint){
-        uint256 amount = balanceOf[tokenOwner];
-        require(amount > 0, "Address doesn't hold any assets");
-
-        // Calculate Tax
-        uint annualTaxAmount = amount * askPriceMap[tokenOwner] * taxRate;
-        uint annualTaxPercent = annualTaxAmount / 100;
-        
-        uint taxAmount = numofDays * annualTaxPercent;
-        
-        return taxAmount/365;
-    }
-
-
-    /**
-     * This is called during verification since the days change won't happen during testing.
-     */
-    function collectTaxForDays(address tokenOwner, uint numofDays) onlyOwner public {
-        uint taxAmount = calcualteTaxForDays(tokenOwner,numofDays);
-        collectTaxPrivate(tokenOwner, taxAmount);
-    }
-
-    function collectTaxPrivate(address tokenOwner, uint taxAmount) internal  {
-        // If owner do not enough ether balance sell tokens to cover the tax amount
-        //if(taxAmount > tokenOwner.balance){
-          //  sell(tokenOwner, (taxAmount - tokenOwner.balance) / buyPrice);
-        //}
-        require((taxAmount < tokenOwner.balance), "The asset holder doesn't have enough balance to pay tax");
-        address contractAddress = this;
-        contractAddress.transfer(taxAmount); // Pay tax to Tax Collector address
-        taxCollectedBalance += taxAmount; // Update tax collected balance
-        taxPaidDateMap[tokenOwner] = now; // // Update the tax paid date to now
-    }
-
     // Token owner will set the ask price
     function setAskPrice(uint256 askPrice) public {
         askPriceMap[msg.sender] = askPrice * 10 ** uint256(decimals);
